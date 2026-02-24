@@ -306,6 +306,7 @@ class Client final : public WebhookActor::Callback {
   class TdOnGetStickerSetPromiseCallback;
   class TdOnGetStickersCallback;
   class TdOnDownloadFileCallback;
+  class TdOnSynchronousDownloadFileCallback;
   class TdOnCancelDownloadFileCallback;
   class TdOnSendCustomRequestCallback;
 
@@ -935,7 +936,7 @@ class Client final : public WebhookActor::Callback {
 
   void on_sent_story(object_ptr<td_api::story> &&story, PromisedQueryPtr query);
 
-  void do_get_file(object_ptr<td_api::file> file, PromisedQueryPtr query);
+  void do_get_file(object_ptr<td_api::file> file, PromisedQueryPtr query, int64 offset = 0, int64 limit = 0);
 
   bool is_file_being_downloaded(int32 file_id) const;
   void on_file_download(int32 file_id, td::Result<object_ptr<td_api::file>> r_file);

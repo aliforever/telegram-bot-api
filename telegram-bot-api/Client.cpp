@@ -6583,6 +6583,27 @@ class Client::TdOnDownloadFileCallback final : public TdQueryCallback {
   int32 file_id_;
 };
 
+class Client::TdOnSynchronousDownloadFileCallback final : public TdQueryCallback {
+ public:
+  TdOnSynchronousDownloadFileCallback(Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    if (result->get_id() == td_api::error::ID) {
+      auto error = move_object_as<td_api::error>(result);
+      client_->fail_query_with_error(std::move(query_), error->code_, error->message_);
+      return;
+    }
+    CHECK(result->get_id() == td_api::file::ID);
+    answer_query(JsonFile(move_object_as<td_api::file>(result).get(), client_, true), std::move(query_));
+  }
+
+ private:
+  Client *client_;
+  PromisedQueryPtr query_;
+};
+
 class Client::TdOnCancelDownloadFileCallback final : public TdQueryCallback {
  public:
   void on_result(object_ptr<td_api::Object> result) final {
@@ -15116,19 +15137,27 @@ td::Status Client::process_get_webhook_info_query(PromisedQueryPtr &query) {
 
 td::Status Client::process_get_file_query(PromisedQueryPtr &query) {
   td::string file_id = query->arg("file_id").str();
-  check_remote_file_id(file_id, std::move(query), [this](object_ptr<td_api::file> file, PromisedQueryPtr query) {
-    do_get_file(std::move(file), std::move(query));
+  int64 offset = get_integer_arg(query.get(), "offset", 0);
+  int64 limit = get_integer_arg(query.get(), "limit", 0);
+  check_remote_file_id(file_id, std::move(query), [this, offset, limit](object_ptr<td_api::file> file, PromisedQueryPtr query) {
+    do_get_file(std::move(file), std::move(query), offset, limit);
   });
   return td::Status::OK();
 }
 
-void Client::do_get_file(object_ptr<td_api::file> file, PromisedQueryPtr query) {
+void Client::do_get_file(object_ptr<td_api::file> file, PromisedQueryPtr query, int64 offset, int64 limit) {
   if (!parameters_->local_mode_ &&
       td::max(file->expected_size_, file->local_->downloaded_size_) > MAX_DOWNLOAD_FILE_SIZE) {  // speculative check
     return fail_query(400, "Bad Request: file is too big", std::move(query));
   }
 
   auto file_id = file->id_;
+  if (offset > 0 || limit > 0) {
+    send_request(make_object<td_api::downloadFile>(file_id, 1, offset, limit, true),
+                 td::make_unique<TdOnSynchronousDownloadFileCallback>(this, std::move(query)));
+    return;
+  }
+
   file_download_listeners_[file_id].push_back(std::move(query));
   send_request(make_object<td_api::downloadFile>(file_id, 1, 0, 0, false),
                td::make_unique<TdOnDownloadFileCallback>(this, file_id));
@@ -15964,7 +15993,7 @@ void Client::json_store_file(td::JsonObjectScope &object, const td_api::file *fi
   if (file->size_) {
     object("file_size", file->size_);
   }
-  if (with_path && file->local_->is_downloading_completed_) {
+  if (with_path && !file->local_->path_.empty()) {
     if (parameters_->local_mode_) {
       if (td::check_utf8(file->local_->path_)) {
         object("file_path", file->local_->path_);
