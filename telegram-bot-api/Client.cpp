@@ -15137,8 +15137,8 @@ td::Status Client::process_get_webhook_info_query(PromisedQueryPtr &query) {
 
 td::Status Client::process_get_file_query(PromisedQueryPtr &query) {
   td::string file_id = query->arg("file_id").str();
-  int64 offset = get_integer_arg(query.get(), "offset", 0);
-  int64 limit = get_integer_arg(query.get(), "limit", 0);
+  int64 offset = td::to_integer<int64>(query->arg("offset"));
+  int64 limit = td::to_integer<int64>(query->arg("limit"));
   check_remote_file_id(file_id, std::move(query), [this, offset, limit](object_ptr<td_api::file> file, PromisedQueryPtr query) {
     do_get_file(std::move(file), std::move(query), offset, limit);
   });
