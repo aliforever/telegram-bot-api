@@ -307,6 +307,7 @@ class Client final : public WebhookActor::Callback {
   class TdOnGetStickersCallback;
   class TdOnDownloadFileCallback;
   class TdOnSynchronousDownloadFileCallback;
+  class TdOnReadFilePartCallback;
   class TdOnCancelDownloadFileCallback;
   class TdOnSendCustomRequestCallback;
 
@@ -908,6 +909,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_set_webhook_query(PromisedQueryPtr &query);
   td::Status process_get_webhook_info_query(PromisedQueryPtr &query);
   td::Status process_get_file_query(PromisedQueryPtr &query);
+  td::Status process_get_file_bytes_query(PromisedQueryPtr &query);
 
   void webhook_verified(td::string cached_ip_address) final;
   void webhook_success() final;
@@ -937,6 +939,7 @@ class Client final : public WebhookActor::Callback {
   void on_sent_story(object_ptr<td_api::story> &&story, PromisedQueryPtr query);
 
   void do_get_file(object_ptr<td_api::file> file, PromisedQueryPtr query, int64 offset = 0, int64 limit = 0);
+  void do_get_file_bytes(object_ptr<td_api::file> file, PromisedQueryPtr query, int64 offset = 0, int64 limit = 0);
 
   bool is_file_being_downloaded(int32 file_id) const;
   void on_file_download(int32 file_id, td::Result<object_ptr<td_api::file>> r_file);

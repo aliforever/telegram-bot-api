@@ -100,6 +100,14 @@ class Query final : public td::ListNode {
 
   void set_retry_after_error(int retry_after);
 
+  td::Slice content_type() const {
+    return content_type_;
+  }
+
+  void set_content_type(td::string content_type) {
+    content_type_ = std::move(content_type);
+  }
+
   bool is_ready() const {
     return state_ != State::Query;
   }
@@ -154,6 +162,7 @@ class Query final : public td::ListNode {
   td::BufferSlice answer_;
   int http_status_code_ = 0;
   int retry_after_ = 0;
+  td::string content_type_ = "application/json";
 
   // for stats
   td::int32 file_count() const {

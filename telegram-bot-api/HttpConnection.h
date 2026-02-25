@@ -44,7 +44,7 @@ class HttpConnection final : public td::HttpInboundConnection::Callback {
 
   void on_query_finished(td::Result<td::unique_ptr<Query>> r_query);
 
-  void send_response(int http_status_code, td::BufferSlice &&content, int retry_after);
+  void send_response(int http_status_code, td::BufferSlice &&content, int retry_after, td::Slice content_type);
 
   void send_http_error(int http_status_code, td::Slice description);
 };

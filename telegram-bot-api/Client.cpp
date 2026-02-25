@@ -372,6 +372,7 @@ bool Client::init_methods() {
   methods_.emplace("deletewebhook", &Client::process_set_webhook_query);
   methods_.emplace("getwebhookinfo", &Client::process_get_webhook_info_query);
   methods_.emplace("getfile", &Client::process_get_file_query);
+  methods_.emplace("getfilebytes", &Client::process_get_file_bytes_query);
   return true;
 }
 
@@ -6597,6 +6598,31 @@ class Client::TdOnSynchronousDownloadFileCallback final : public TdQueryCallback
     }
     CHECK(result->get_id() == td_api::file::ID);
     answer_query(JsonFile(move_object_as<td_api::file>(result).get(), client_, true), std::move(query_));
+  }
+
+ private:
+  Client *client_;
+  PromisedQueryPtr query_;
+};
+
+class Client::TdOnReadFilePartCallback final : public TdQueryCallback {
+ public:
+  TdOnReadFilePartCallback(Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    if (result->get_id() == td_api::error::ID) {
+      auto error = move_object_as<td_api::error>(result);
+      client_->fail_query_with_error(std::move(query_), error->code_, error->message_);
+      return;
+    }
+    CHECK(result->get_id() == td_api::data::ID);
+    auto file_part = move_object_as<td_api::data>(result);
+    
+    query_->set_content_type("application/octet-stream");
+    query_->set_ok(td::BufferSlice(file_part->data_));
+    query_.reset();
   }
 
  private:
@@ -15161,6 +15187,22 @@ void Client::do_get_file(object_ptr<td_api::file> file, PromisedQueryPtr query, 
   file_download_listeners_[file_id].push_back(std::move(query));
   send_request(make_object<td_api::downloadFile>(file_id, 1, 0, 0, false),
                td::make_unique<TdOnDownloadFileCallback>(this, file_id));
+}
+
+td::Status Client::process_get_file_bytes_query(PromisedQueryPtr &query) {
+  td::string file_id = query->arg("file_id").str();
+  int64 offset = td::to_integer<int64>(query->arg("offset"));
+  int64 limit = td::to_integer<int64>(query->arg("limit"));
+  check_remote_file_id(file_id, std::move(query), [this, offset, limit](object_ptr<td_api::file> file, PromisedQueryPtr query) {
+    do_get_file_bytes(std::move(file), std::move(query), offset, limit);
+  });
+  return td::Status::OK();
+}
+
+void Client::do_get_file_bytes(object_ptr<td_api::file> file, PromisedQueryPtr query, int64 offset, int64 limit) {
+  auto file_id = file->id_;
+  send_request(make_object<td_api::getRemoteFileBytes>(file_id, offset > 0 ? offset : 0, limit > 0 ? limit : 0),
+               td::make_unique<TdOnReadFilePartCallback>(this, std::move(query)));
 }
 
 bool Client::is_file_being_downloaded(int32 file_id) const {

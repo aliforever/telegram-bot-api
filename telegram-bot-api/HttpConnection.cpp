@@ -60,14 +60,14 @@ void HttpConnection::on_query_finished(td::Result<td::unique_ptr<Query>> r_query
   LOG_CHECK(r_query.is_ok()) << r_query.error();
 
   auto query = r_query.move_as_ok();
-  send_response(query->http_status_code(), std::move(query->answer()), query->retry_after());
+  send_response(query->http_status_code(), std::move(query->answer()), query->retry_after(), query->content_type());
 }
 
-void HttpConnection::send_response(int http_status_code, td::BufferSlice &&content, int retry_after) {
+void HttpConnection::send_response(int http_status_code, td::BufferSlice &&content, int retry_after, td::Slice content_type) {
   td::HttpHeaderCreator hc;
   hc.init_status_line(http_status_code);
   hc.set_keep_alive();
-  hc.set_content_type("application/json");
+  hc.set_content_type(content_type);
   if (retry_after > 0) {
     hc.add_header("Retry-After", PSLICE() << retry_after);
   }
@@ -88,7 +88,7 @@ void HttpConnection::send_response(int http_status_code, td::BufferSlice &&conte
 }
 
 void HttpConnection::send_http_error(int http_status_code, td::Slice description) {
-  send_response(http_status_code, td::json_encode<td::BufferSlice>(JsonQueryError(http_status_code, description)), 0);
+  send_response(http_status_code, td::json_encode<td::BufferSlice>(JsonQueryError(http_status_code, description)), 0, "application/json");
 }
 
 }  // namespace telegram_bot_api
